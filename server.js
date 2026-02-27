@@ -1,9 +1,3 @@
-// ═══════════════════════════════════════════════════
-//   MOODVERSE — Secure Backend Server
-//   Your Anthropic API key lives here, safe on the
-//   server. Frontend never touches it directly.
-// ═══════════════════════════════════════════════════
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -13,27 +7,23 @@ const path = require('path');
 
 const app = express();
 app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
-// ── Validate API key on startup ──
 if (!ANTHROPIC_API_KEY || !ANTHROPIC_API_KEY.startsWith('sk-')) {
   console.error('❌  ERROR: Missing or invalid ANTHROPIC_API_KEY in .env');
-  console.error('   Create a .env file with: ANTHROPIC_API_KEY=sk-ant-...');
   process.exit(1);
 }
 
-// ── Middleware ──
 app.use(express.json({ limit: '10kb' }));
 app.use(cors({
   origin: process.env.ALLOWED_ORIGIN || '*',
   methods: ['GET', 'POST'],
 }));
 
-// ── Rate Limiting ──
-// Prevents abuse — max 20 portrait generations per IP per hour
 const portraitLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
@@ -43,7 +33,6 @@ const portraitLimiter = rateLimit({
   }
 });
 
-// General limiter — 100 requests per 15 mins
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -52,10 +41,8 @@ const generalLimiter = rateLimit({
 
 app.use(generalLimiter);
 
-// ── Serve frontend ──
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Health check ──
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -65,15 +52,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// ══════════════════════════════════════════════
-//   POST /api/generate-portrait
-//   Main endpoint: receives mood data, calls
-//   Anthropic securely, returns soul reading
-// ══════════════════════════════════════════════
 app.post('/api/generate-portrait', portraitLimiter, async (req, res) => {
   const { mood, energy, tags, journal } = req.body;
 
-  // ── Input validation ──
   if (!mood || typeof mood !== 'string' || mood.length > 50) {
     return res.status(400).json({ error: 'Invalid mood input.' });
   }
@@ -119,7 +100,7 @@ Generate a deeply personal, poetic soul reading. Return ONLY valid JSON with thi
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,          // ← Key stays on server 🔒
+        'x-api-key': ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
@@ -146,11 +127,10 @@ Generate a deeply personal, poetic soul reading. Return ONLY valid JSON with thi
     try {
       reading = JSON.parse(clean);
     } catch (parseErr) {
-      console.error('JSON parse error:', parseErr.message, '\nRaw:', rawText.slice(0, 200));
+      console.error('JSON parse error:', parseErr.message);
       return res.status(500).json({ error: 'Invalid response from AI. Please try again.' });
     }
 
-    // Return the reading to the frontend
     res.json({ success: true, reading });
 
   } catch (err) {
@@ -159,12 +139,10 @@ Generate a deeply personal, poetic soul reading. Return ONLY valid JSON with thi
   }
 });
 
-// ── Catch-all: serve frontend for any unknown route ──
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ── Start server ──
 app.listen(PORT, () => {
   console.log('');
   console.log('  🌌  MOODVERSE Server');
